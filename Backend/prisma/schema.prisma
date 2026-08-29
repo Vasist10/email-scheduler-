@@ -1,0 +1,50 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum EmailStatus {
+  SCHEDULED
+  PROCESSING
+  SENT
+  FAILED
+}
+
+model User {
+  id        String   @id @default(uuid())
+  googleId  String   @unique
+  name      String
+  email     String   @unique
+  avatar    String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Slack OAuth — null until the user clicks "Connect Slack"
+  slackAccessToken String? // incoming-webhook / chat:write bot token
+  slackTeamName    String? // workspace display name (for UI feedback)
+  slackUserId      String? // Slack member ID (e.g. "U012AB3CD")
+
+  emails Email[]
+}
+
+model Email {
+  id            String      @id @default(uuid())
+  to            String
+  subject       String
+  body          String
+  sendAt        DateTime
+  status        EmailStatus @default(SCHEDULED)
+  userEmail     String
+  jobId         String?     // BullMQ job ID — stored after job is created
+  campaignId    String?     // Groups emails scheduled in the same bulk request
+  failureReason String?     // Last SMTP / network error message
+  attempts      Int         @default(0) // number of send attempts made
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  user User @relation(fields: [userEmail], references: [email])
+}

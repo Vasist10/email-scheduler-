@@ -1,0 +1,52 @@
+{
+  "name": "email-scheduler",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "ts-node-dev src/server.ts",
+    "worker": "ts-node-dev src/workers/email.worker.ts",
+    "verify": "ts-node-dev src/scripts/verifyWorker.ts",
+    "build": "tsc --project tsconfig.json",
+    "start": "node dist/server.js",
+    "start:worker": "node dist/workers/email.worker.js",
+    "migrate": "prisma migrate deploy"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@bull-board/api": "^9.5.0",
+    "@bull-board/express": "^9.5.0",
+    "@elastic/elasticsearch": "^9.5.0",
+    "@prisma/client": "^5.10.2",
+    "@slack/web-api": "^8.1.0",
+    "axios": "^1.20.0",
+    "bullmq": "^5.67.1",
+    "cors": "^2.8.6",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "express-basic-auth": "^1.2.1",
+    "ioredis": "^5.9.2",
+    "jsonwebtoken": "^9.0.3",
+    "nodemailer": "^7.0.12",
+    "passport": "^0.7.0",
+    "passport-google-oauth20": "^2.0.0",
+    "passport-slack-oauth2": "^1.2.0",
+    "uuid": "^14.0.2"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^25.0.10",
+    "@types/nodemailer": "^7.0.5",
+    "@types/passport": "^1.0.17",
+    "@types/passport-google-oauth20": "^2.0.17",
+    "@types/uuid": "^10.0.0",
+    "prisma": "^5.10.2",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.9.3"
+  }
+}
