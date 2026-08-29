@@ -8,9 +8,9 @@ import { env } from "./env";
  */
 export const createTransporter = () => {
   return nodemailer.createTransport({
-    host: "smtp.ethereal.email",
-    port: 587,
-    secure: false,
+    host: env.ETHEREAL_HOST,
+    port: env.ETHEREAL_PORT,
+    secure: env.ETHEREAL_SECURE,
     auth: {
       user: env.ETHEREAL_USER,
       pass: env.ETHEREAL_PASS,

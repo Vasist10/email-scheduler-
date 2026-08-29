@@ -278,6 +278,54 @@ FRONTEND_URL=http://localhost
 
 ---
 
+## Railway Deployment
+
+Create these six Railway services:
+
+1. PostgreSQL
+2. Redis
+3. Elasticsearch 8.x
+4. Backend
+5. Worker
+6. Frontend
+
+The Backend and Worker use the same `Backend/Dockerfile` image. Configure the
+Backend service to start with:
+
+```bash
+npm run migrate && node dist/server.js
+```
+
+Configure the Worker service to use the same image with:
+
+```bash
+node dist/workers/email.worker.js
+```
+
+The backend runs Prisma migrations before starting the API; the worker only
+starts BullMQ processing and does not run migrations. Set the backend and
+worker variables consistently: `DATABASE_URL`, `REDIS_URL` (or
+`REDIS_HOST`/`REDIS_PORT` and optional `REDIS_PASSWORD`), `ELASTICSEARCH_URL`,
+`ETHEREAL_HOST`, `ETHEREAL_PORT`, `ETHEREAL_SECURE`, `ETHEREAL_USER`,
+`ETHEREAL_PASS`, `MAX_EMAILS_PER_HOUR`, `MIN_DELAY_BETWEEN_EMAILS_MS`,
+`WORKER_CONCURRENCY`, `WORKER_MAX_ATTEMPTS`, `WORKER_BACKOFF_MS`,
+`JWT_SECRET`, `FRONTEND_URL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
+`GOOGLE_CALLBACK_URL`, `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET`,
+`SLACK_CALLBACK_URL`, `ADMIN_USER`, and `ADMIN_PASSWORD`. Railway supplies
+`PORT` to the backend automatically.
+
+Build the Frontend service from `frontend/Dockerfile` and provide the Docker
+build argument `VITE_API_BASE_URL` with the public Backend URL. Set
+`FRONTEND_URL` to the public Frontend URL. Update the OAuth providers with:
+
+- Google callback: `https://<backend-domain>/auth/google/callback`
+- Slack callback: `https://<backend-domain>/auth/slack/callback`
+
+Use the Railway PostgreSQL, Redis, and Elasticsearch connection URLs rather
+than localhost values. Do not commit those URLs when they contain credentials.
+
+---
+
 ## Environment Variables
 
 ```env
@@ -288,8 +336,10 @@ PORT=4000
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/email_scheduler
 
 # Redis
+REDIS_URL=
 REDIS_HOST=localhost
 REDIS_PORT=6379
+REDIS_PASSWORD=
 
 # Elasticsearch (optional — search degrades gracefully if unreachable)
 ELASTICSEARCH_URL=http://localhost:9200
@@ -306,6 +356,9 @@ JWT_SECRET=change-this-to-a-long-random-string
 FRONTEND_URL=http://localhost:5173
 
 # Ethereal SMTP (https://ethereal.email)
+ETHEREAL_HOST=smtp.ethereal.email
+ETHEREAL_PORT=587
+ETHEREAL_SECURE=false
 ETHEREAL_USER=...
 ETHEREAL_PASS=...
 

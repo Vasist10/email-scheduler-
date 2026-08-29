@@ -8,8 +8,17 @@ import { env } from "./env";
 const redisOptions: RedisOptions = {
   host: env.REDIS_HOST,
   port: env.REDIS_PORT,
+  ...(env.REDIS_PASSWORD ? { password: env.REDIS_PASSWORD } : {}),
   maxRetriesPerRequest: null,
 };
+
+const createConnection = (): IORedis =>
+  env.REDIS_URL
+    ? new IORedis(env.REDIS_URL, {
+        ...(env.REDIS_PASSWORD ? { password: env.REDIS_PASSWORD } : {}),
+        maxRetriesPerRequest: null,
+      })
+    : new IORedis(redisOptions);
 
 /**
  * Primary shared connection — used by:
@@ -21,10 +30,10 @@ const redisOptions: RedisOptions = {
  * because the Worker puts IORedis into blocking/subscriber mode
  * which is incompatible with regular Redis commands on the same socket.
  */
-export const redisConnection = new IORedis(redisOptions);
+export const redisConnection = createConnection();
 
 redisConnection.on("connect", () =>
-  console.log(`[Redis] Connected at ${env.REDIS_HOST}:${env.REDIS_PORT}`)
+  console.log(`[Redis] Connected at ${env.REDIS_URL ?? `${env.REDIS_HOST}:${env.REDIS_PORT}`}`)
 );
 redisConnection.on("error", (err) =>
   console.error("[Redis] Connection error:", err.message)
@@ -35,4 +44,4 @@ redisConnection.on("error", (err) =>
  * Call this once per BullMQ Worker instance so each worker
  * has an isolated connection that BullMQ can freely manage.
  */
-export const createRedisConnection = (): IORedis => new IORedis(redisOptions);
+export const createRedisConnection = (): IORedis => createConnection();

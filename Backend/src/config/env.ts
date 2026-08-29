@@ -20,8 +20,10 @@ export const env = {
   DATABASE_URL: requireEnv("DATABASE_URL"),
 
   // Redis
+  REDIS_URL: process.env.REDIS_URL,
   REDIS_HOST: optionalEnv("REDIS_HOST", "localhost"),
   REDIS_PORT: parseInt(optionalEnv("REDIS_PORT", "6379"), 10),
+  REDIS_PASSWORD: process.env.REDIS_PASSWORD,
 
   // Google OAuth
   GOOGLE_CLIENT_ID: requireEnv("GOOGLE_CLIENT_ID"),
@@ -35,6 +37,9 @@ export const env = {
   FRONTEND_URL: requireEnv("FRONTEND_URL"),
 
   // Ethereal SMTP
+  ETHEREAL_HOST: optionalEnv("ETHEREAL_HOST", "smtp.ethereal.email"),
+  ETHEREAL_PORT: parseInt(optionalEnv("ETHEREAL_PORT", "587"), 10),
+  ETHEREAL_SECURE: optionalEnv("ETHEREAL_SECURE", "false") === "true",
   ETHEREAL_USER: requireEnv("ETHEREAL_USER"),
   ETHEREAL_PASS: requireEnv("ETHEREAL_PASS"),
 

@@ -97,6 +97,12 @@ services:
       # postgresql://postgres:postgres@postgres:5432/email_scheduler
     ports:
       - "${BACKEND_PORT:-4000}:4000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
     depends_on:
       postgres:
         condition: service_healthy
@@ -126,7 +132,7 @@ services:
         condition: service_healthy
       # Wait for the backend service so migrations always run first
       backend:
-        condition: service_started
+        condition: service_healthy
     command: ["node", "dist/workers/email.worker.js"]
 
   frontend:

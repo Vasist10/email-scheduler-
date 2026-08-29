@@ -59,7 +59,6 @@ USER appuser
 
 EXPOSE 4000
 
-# Default command starts the HTTP server.
-# The worker is run as a separate service in docker-compose
-# using CMD override: ["node", "dist/workers/email.worker.js"]
-CMD ["node", "dist/server.js"]
+# The backend owns production migrations. Railway's worker service overrides
+# this command and starts only the BullMQ worker.
+CMD ["sh", "-c", "npm run migrate && node dist/server.js"]

@@ -27,6 +27,10 @@ app.use(
 app.use(express.json());
 app.use(passport.initialize());
 
+app.get("/health", (_req, res) => {
+  res.json({ ok: true });
+});
+
 // Routes
 app.use("/api/emails", emailRoutes);
 app.use("/auth", authRoutes);
@@ -37,7 +41,7 @@ app.use("/admin/queues", adminRouter);
 app.use(errorHandler);
 
 app.listen(env.PORT, async () => {
-  console.log(`Server running on http://localhost:${env.PORT}`);
+  console.log(`Server running on port ${env.PORT}`);
 
   // Reset any emails stuck in PROCESSING from a previous crashed run
   await recoverStuckEmails();
