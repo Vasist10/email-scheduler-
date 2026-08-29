@@ -8,6 +8,9 @@ FROM node:20-alpine AS deps
 
 WORKDIR /app
 
+# Prisma requires OpenSSL to detect and run the correct query engine.
+RUN apk add --no-cache openssl
+
 COPY package.json package-lock.json ./
 # Install ALL deps (dev deps needed for tsc)
 RUN npm ci
@@ -19,6 +22,8 @@ RUN npm ci
 FROM node:20-alpine AS build
 
 WORKDIR /app
+
+RUN apk add --no-cache openssl
 
 # Bring in installed node_modules from deps stage
 COPY --from=deps /app/node_modules ./node_modules
@@ -41,9 +46,11 @@ FROM node:20-alpine AS runtime
 
 WORKDIR /app
 
-# Re-install only production dependencies (no dev deps, no tsc, no ts-node)
+# Re-install only production dependencies (no dev deps, no tsc, no ts-node).
+# Runtime install scripts are unnecessary because Prisma is generated below
+# during the image build and its generated files are copied from build.
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+RUN apk add --no-cache openssl && npm ci --omit=dev --ignore-scripts
 
 # Copy compiled output from build stage
 COPY --from=build /app/dist ./dist
@@ -55,6 +62,7 @@ COPY --from=build /app/node_modules/@prisma ./node_modules/@prisma
 
 # Non-root user for security
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+RUN chown -R appuser:appgroup /app
 USER appuser
 
 EXPOSE 4000
