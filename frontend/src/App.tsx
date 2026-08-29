@@ -30,6 +30,9 @@ function App() {
           )
         }
       />
+
+      {/* Alias — Slack OAuth redirects back to /dashboard */}
+      <Route path="/dashboard" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

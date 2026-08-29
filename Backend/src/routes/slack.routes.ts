@@ -96,7 +96,7 @@ router.get("/callback", async (req: Request, res: Response) => {
   // Slack may send an error if the user denied the app
   if (error || !code || !state) {
     console.warn("[Slack] OAuth denied or missing params:", error);
-    return res.redirect(`${env.FRONTEND_URL}/dashboard?slack=denied`);
+    return res.redirect(`${env.FRONTEND_URL}/?slack=denied`);
   }
 
   // Verify the state JWT to get the user's email
@@ -106,7 +106,7 @@ router.get("/callback", async (req: Request, res: Response) => {
     userEmail = payload.email;
   } catch {
     console.warn("[Slack] Invalid or expired state token");
-    return res.redirect(`${env.FRONTEND_URL}/dashboard?slack=error`);
+    return res.redirect(`${env.FRONTEND_URL}/?slack=error`);
   }
 
   // Exchange the code for a token using Slack's oauth.v2.access endpoint
@@ -126,19 +126,26 @@ router.get("/callback", async (req: Request, res: Response) => {
 
     if (!data.ok) {
       console.error("[Slack] oauth.v2.access failed:", data.error);
-      return res.redirect(`${env.FRONTEND_URL}/dashboard?slack=error`);
+      return res.redirect(`${env.FRONTEND_URL}/?slack=error`);
     }
 
     // data.authed_user.id  → the Slack member ID of the *installing user*
     // data.access_token    → bot token (used for chat.postMessage)
     // data.team.name       → workspace display name
-    const accessToken: string = data.access_token;
+    const accessToken: string = data.access_token ?? "";
     const teamName: string    = data.team?.name ?? "";
     const slackUserId: string = data.authed_user?.id ?? "";
 
+    // A bot token without the authorizing member ID cannot be used to open
+    // the DM where rate-limit notifications are delivered.
+    if (!accessToken || !slackUserId) {
+      console.error("[Slack] OAuth response did not include a bot token and member ID");
+      return res.redirect(`${env.FRONTEND_URL}/?slack=error`);
+    }
+
     // Persist to database
     await prisma.user.update({
-      where: { email: userEmail },
+      where: { email: userEmail.toLowerCase().trim() },
       data: { slackAccessToken: accessToken, slackTeamName: teamName, slackUserId },
     });
 
@@ -146,10 +153,10 @@ router.get("/callback", async (req: Request, res: Response) => {
       `[Slack] Connected workspace "${teamName}" for user ${userEmail}`
     );
 
-    return res.redirect(`${env.FRONTEND_URL}/dashboard?slack=connected`);
+    return res.redirect(`${env.FRONTEND_URL}/?slack=connected`);
   } catch (err) {
     console.error("[Slack] Token exchange error:", (err as Error).message);
-    return res.redirect(`${env.FRONTEND_URL}/dashboard?slack=error`);
+    return res.redirect(`${env.FRONTEND_URL}/?slack=error`);
   }
 });
 

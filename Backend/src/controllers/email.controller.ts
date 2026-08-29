@@ -3,6 +3,7 @@ import { AuthRequest } from "../middlewares/auth.middleware";
 import prisma from "../config/prisma";
 import { emailQueue } from "../queues/email.queue";
 import { v4 as uuidv4 } from "uuid";
+import { env } from "../config/env";
 
 // Simple RFC-5322-friendly email regex
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -53,6 +54,27 @@ export const scheduleEmail = async (req: AuthRequest, res: Response) => {
     };
 
     const user = req.user;
+
+    // ── Guard: ensure the authenticated user exists in the DB ────────────
+    // The JWT contains the user's email from the time of Google OAuth login.
+    // If for any reason the User row is missing (e.g. DB was reset after login),
+    // return a clear 401 rather than a cryptic FK constraint error.
+    const userEmail: string = (user.email as string)?.toLowerCase().trim();
+
+    if (!userEmail) {
+      return res.status(401).json({ message: "Authenticated user has no email claim" });
+    }
+
+    const existingUser = await prisma.user.findUnique({
+      where: { email: userEmail },
+      select: { email: true },
+    });
+
+    if (!existingUser) {
+      return res.status(401).json({
+        message: "User account not found. Please log out and log in again.",
+      });
+    }
 
     // ── Validate recipients ──────────────────────────────────────────────
     if (!Array.isArray(recipients) || recipients.length === 0) {
@@ -109,15 +131,20 @@ export const scheduleEmail = async (req: AuthRequest, res: Response) => {
           body,
           sendAt: emailSendAt,
           status: "SCHEDULED",
-          userEmail: user.email,
+          userEmail: userEmail,  // verified against DB above
           campaignId,
         },
       });
 
       // 2. Add a delayed BullMQ job for this specific email
+      // Store hourlyLimit in job data so the worker enforces the
+      // per-campaign limit rather than the global env default.
       const job = await emailQueue.add(
         "send-email",
-        { emailId: email.id },
+        {
+          emailId:    email.id,
+          hourlyLimit: hourlyLimit ?? env.MAX_EMAILS_PER_HOUR,
+        },
         {
           delay: jobDelay,
           jobId: `email-${email.id}`, // deterministic jobId prevents duplicates on restart
@@ -150,11 +177,11 @@ export const scheduleEmail = async (req: AuthRequest, res: Response) => {
 // ---------------------------------------------------------------------------
 export const getScheduledEmails = async (req: AuthRequest, res: Response) => {
   try {
-    const user = req.user;
+    const userEmail = (req.user.email as string)?.toLowerCase().trim();
 
     const emails = await prisma.email.findMany({
       where: {
-        userEmail: user.email,
+        userEmail,
         status: { in: ["SCHEDULED", "PROCESSING"] },
       },
       orderBy: { sendAt: "asc" },
@@ -174,10 +201,10 @@ export const getScheduledEmails = async (req: AuthRequest, res: Response) => {
 // ---------------------------------------------------------------------------
 export const getSentEmails = async (req: AuthRequest, res: Response) => {
   try {
-    const user = req.user;
+    const userEmail = (req.user.email as string)?.toLowerCase().trim();
 
     const emails = await prisma.email.findMany({
-      where: { userEmail: user.email, status: "SENT" },
+      where: { userEmail, status: "SENT" },
       orderBy: { updatedAt: "desc" },
     });
 
@@ -193,10 +220,10 @@ export const getSentEmails = async (req: AuthRequest, res: Response) => {
 // ---------------------------------------------------------------------------
 export const getFailedEmails = async (req: AuthRequest, res: Response) => {
   try {
-    const user = req.user;
+    const userEmail = (req.user.email as string)?.toLowerCase().trim();
 
     const emails = await prisma.email.findMany({
-      where: { userEmail: user.email, status: "FAILED" },
+      where: { userEmail, status: "FAILED" },
       orderBy: { updatedAt: "desc" },
     });
 

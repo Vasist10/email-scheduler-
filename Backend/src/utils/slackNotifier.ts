@@ -18,8 +18,12 @@ export async function sendSlackNotification(
   slackUserId: string | null | undefined,
   message: string
 ): Promise<void> {
-  // Guard: no token or no user ID — nothing to do
-  if (!accessToken || !slackUserId) return;
+  if (!accessToken || !slackUserId) {
+    console.warn(
+      `[Slack] Cannot send notification: ${!accessToken ? "access token" : "Slack member ID"} is missing`
+    );
+    return;
+  }
 
   try {
     const slack = new WebClient(accessToken);
@@ -41,6 +45,15 @@ export async function sendSlackNotification(
     console.log(`[Slack] Notification sent to user ${slackUserId}`);
   } catch (err) {
     // Non-fatal — log and swallow so the worker / caller is never disrupted
-    console.warn("[Slack] Failed to send notification:", (err as Error).message);
+    const error = err as { message?: string; data?: { error?: string } };
+    if (error.data?.error === "messages_tab_disabled") {
+      console.warn(
+        "[Slack] Enable the Messages tab under Slack App Home, then reinstall/reconnect the app"
+      );
+    }
+    console.warn(
+      "[Slack] Failed to send notification:",
+      error.data?.error ?? error.message ?? "unknown Slack error"
+    );
   }
 }

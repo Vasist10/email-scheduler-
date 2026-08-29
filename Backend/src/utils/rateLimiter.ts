@@ -28,7 +28,7 @@ return current
  */
 function buildRateKey(userEmail: string, now: Date): string {
   const year  = now.getUTCFullYear();
-  const month = String(now.getUTCMonth() + 1).padStart(2, "0"); // 0-indexed → 1-indexed
+  const month = String(now.getUTCMonth() + 1).padStart(2, "0");
   const day   = String(now.getUTCDate()).padStart(2, "0");
   const hour  = String(now.getUTCHours()).padStart(2, "0");
   return `email_rate:${userEmail}:${year}-${month}-${day}-${hour}`;
@@ -37,23 +37,36 @@ function buildRateKey(userEmail: string, now: Date): string {
 /**
  * Atomically checks and increments the per-user hourly send counter.
  *
+ * @param userEmail   The user whose quota to check
+ * @param maxOverride If provided, overrides env.MAX_EMAILS_PER_HOUR for this
+ *                    specific campaign. This is the value the user set in the
+ *                    compose modal (hourlyLimit). Defaults to env.MAX_EMAILS_PER_HOUR.
+ *
  * @returns
- *   allowed  – true when the user is within their hourly limit
- *   count    – counter value after this increment
- *   maxPerHour
- *   resetAt  – Unix ms timestamp of the start of the next UTC hour
+ *   allowed    – true when the user is within their hourly limit
+ *   count      – counter value after this increment
+ *   maxPerHour – the effective limit that was used
+ *   resetAt    – Unix ms timestamp of the start of the next UTC hour
+ *   redisKey   – the Redis key used (for logging/debugging)
  */
 export const checkHourlyLimit = async (
-  userEmail: string
+  userEmail: string,
+  maxOverride?: number
 ): Promise<{
-  allowed: boolean;
-  count: number;
+  allowed:    boolean;
+  count:      number;
   maxPerHour: number;
-  resetAt: number;
+  resetAt:    number;
+  redisKey:   string;
 }> => {
-  const maxPerHour = env.MAX_EMAILS_PER_HOUR;
-  const now = new Date();
+  // Use the per-campaign override if provided, otherwise fall back to the
+  // global env setting. This is the critical fix: previously only the global
+  // default was ever used, meaning the compose-modal hourlyLimit was ignored.
+  const maxPerHour = (maxOverride !== undefined && maxOverride > 0)
+    ? maxOverride
+    : env.MAX_EMAILS_PER_HOUR;
 
+  const now = new Date();
   const redisKey = buildRateKey(userEmail, now);
 
   // Single atomic operation: increment + conditional expire
@@ -73,12 +86,16 @@ export const checkHourlyLimit = async (
     0, 0, 0
   );
 
-  return {
-    allowed: count <= maxPerHour,
-    count,
-    maxPerHour,
-    resetAt,
-  };
+  const allowed = count <= maxPerHour;
+
+  // ── Detailed rate-limit logging ────────────────────────────────────────
+  console.log(
+    `[RateLimit] user=${userEmail} key=${redisKey} ` +
+    `count=${count} max=${maxPerHour} ` +
+    `allowed=${allowed} resetAt=${new Date(resetAt).toISOString()}`
+  );
+
+  return { allowed, count, maxPerHour, resetAt, redisKey };
 };
 
 /**

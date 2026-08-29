@@ -35,7 +35,10 @@ export const searchEmailsHandler = async (
       Math.max(1, parseInt((req.query.size as string) ?? "20", 10))
     );
 
-    const results = await searchEmails(req.user.email, query, from, size);
+    const results = await searchEmails(
+      (req.user.email as string)?.toLowerCase().trim(),
+      query, from, size
+    );
 
     return res.json({
       query,

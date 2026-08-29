@@ -18,9 +18,9 @@ passport.use(
     ) => {
       try {
         const googleId = profile.id;
-        const name = profile.displayName;
-        const email = profile.emails?.[0]?.value ?? "";
-        const avatar = profile.photos?.[0]?.value ?? "";
+        const name     = profile.displayName;
+        const email    = (profile.emails?.[0]?.value ?? "").toLowerCase().trim();
+        const avatar   = profile.photos?.[0]?.value ?? "";
 
         // Upsert user — create on first login, update profile on subsequent logins
         const user = await prisma.user.upsert({

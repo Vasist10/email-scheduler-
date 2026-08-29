@@ -2,7 +2,7 @@
 
 A production-grade bulk email scheduling system built for the ReachInbox assignment.
 
-Schedule emails to hundreds of recipients, track delivery in real time, enforce per-user hourly rate limits, get Slack notifications when limits are hit, and monitor everything through a live BullMQ dashboard.
+Schedule emails to hundreds of recipients, track email processing and send status, enforce per-user hourly rate limits, get Slack notifications when limits are hit, and monitor everything through a live BullMQ dashboard.
 
 ---
 
@@ -90,6 +90,53 @@ BullMQ Worker (fires at scheduled time)
 
 ---
 
+## Assignment Requirements Checklist
+
+### Backend
+
+- Express + TypeScript API
+- PostgreSQL persistence via Prisma
+- BullMQ delayed scheduling backed by Redis
+- Configurable worker concurrency
+- Minimum delay between sends
+- Redis-backed hourly rate limiting
+- Rate-limited jobs are rescheduled rather than failed
+- Slack OAuth + live rate-limit DM notifications
+- Google OAuth + JWT authentication
+- Ethereal SMTP
+- Elasticsearch indexing/search
+- Bull-board live queue dashboard
+- Retry with exponential backoff
+- Restart recovery and idempotency
+
+### Frontend
+
+- Google Login
+- User name, email and avatar
+- Logout
+- Scheduled / Sent / Failed views
+- Compose email modal
+- CSV recipient upload
+- Start time / delay / hourly limit controls
+- Loading and empty states
+- Error handling and success feedback
+
+---
+
+## Behavior Under Load
+
+The system is designed to handle 1000+ emails scheduled around the same time:
+
+- One BullMQ delayed job is created per recipient
+- Jobs persist in Redis
+- Configurable worker concurrency controls parallel processing
+- Minimum inter-email delay prevents burst sending
+- Redis-backed hourly rate limiting prevents exceeding the configured limit
+- Rate-limited jobs are rescheduled rather than dropped or failed
+- Recipient order is preserved as much as reasonably possible
+
+---
+
 ## Rate Limiting
 
 Uses an atomic Lua script in Redis:
@@ -105,6 +152,12 @@ return current
 - Atomic across all worker instances — no race condition possible
 - Key expires at the top of the next UTC hour
 - Rate-limited emails are **rescheduled** (not failed) to fire after the reset
+
+### Email Send Throttling
+
+- Default minimum delay between sends is 2 seconds
+- Configure it with `MIN_DELAY_BETWEEN_EMAILS_MS`
+- Configure worker concurrency with `WORKER_CONCURRENCY`
 
 ---
 
@@ -273,6 +326,11 @@ SLACK_CLIENT_ID=...
 SLACK_CLIENT_SECRET=...
 SLACK_CALLBACK_URL=http://localhost:4000/auth/slack/callback
 ```
+
+In the Slack app configuration, open **App Home** and enable the **Messages Tab**.
+This is required because rate-limit alerts are sent as a direct message from the
+app to the user who connected Slack. After changing this setting, reinstall or
+reconnect the app in the workspace.
 
 ---
 

@@ -53,7 +53,10 @@ export const emailWorker = new Worker(
   "email-queue",
 
   async (job) => {
-    const { emailId } = job.data as { emailId: string };
+    const { emailId, hourlyLimit } = job.data as {
+      emailId:      string;
+      hourlyLimit?: number;
+    };
 
     // ── 1. Fetch email record ────────────────────────────────────────────
     const email = await prisma.email.findUnique({ where: { id: emailId } });
@@ -80,7 +83,9 @@ export const emailWorker = new Worker(
     }
 
     // ── 3. Hourly rate limit check ───────────────────────────────────────
-    const rate = await checkHourlyLimit(email.userEmail);
+    // Pass the per-campaign hourlyLimit so the worker enforces the value
+    // the user configured in the compose modal, not just the global default.
+    const rate = await checkHourlyLimit(email.userEmail, hourlyLimit);
 
     if (!rate.allowed) {
       // Decrement the counter we just incremented — this email will be
@@ -93,23 +98,36 @@ export const emailWorker = new Worker(
       const delay = rate.resetAt - Date.now() + 1000; // 1s buffer past the reset
 
       console.log(
-        `[Worker] Rate limit reached for ${email.userEmail} ` +
-          `(${rate.count}/${rate.maxPerHour}). ` +
-          `Rescheduling email ${email.id} in ${Math.round(delay / 1000)}s`
+        `[Worker] ⏸ Rate limit reached for ${email.userEmail} ` +
+        `(${rate.count}/${rate.maxPerHour}) key=${rate.redisKey}. ` +
+        `Rescheduling email ${email.id} in ${Math.round(delay / 1000)}s ` +
+        `(~${Math.round(delay / 60_000)} min) resetAt=${new Date(rate.resetAt).toISOString()}`
       );
 
       // Notify the user on Slack (best-effort — never crashes the worker)
       // Fetch their token and Slack user ID from the DB.
-      const userRecord = await prisma.user.findUnique({
-        where:  { email: email.userEmail },
-        select: { slackAccessToken: true, slackUserId: true },
-      });
-      await sendSlackNotification(
-        userRecord?.slackAccessToken ?? null,
-        userRecord?.slackUserId      ?? null,
-        "⚠️ Email sending paused. Hourly limit reached. " +
-          `Your emails will resume in ~${Math.round(delay / 60_000)} minute(s).`
-      );
+      try {
+        const userRecord = await prisma.user.findUnique({
+          where:  { email: email.userEmail.toLowerCase().trim() },
+          select: { slackAccessToken: true, slackUserId: true },
+        });
+
+        if (!userRecord) {
+          console.warn(`[Slack] No user found for ${email.userEmail}; notification skipped`);
+        }
+
+        await sendSlackNotification(
+          userRecord?.slackAccessToken ?? null,
+          userRecord?.slackUserId      ?? null,
+          "Email sending paused: hourly limit reached. " +
+            `Your emails will resume in approximately ${Math.max(1, Math.round(delay / 60_000))} minute(s).`
+        );
+      } catch (notificationError) {
+        console.warn(
+          "[Slack] Notification lookup failed; continuing reschedule:",
+          (notificationError as Error).message
+        );
+      }
 
       // Put the email back to SCHEDULED so it shows correctly in the dashboard
       await prisma.email.update({
@@ -119,9 +137,11 @@ export const emailWorker = new Worker(
 
       // Add a new delayed job. Using the deterministic jobId means BullMQ
       // won't create a duplicate if this exact reschedule already exists.
+      // Carry hourlyLimit forward so the rescheduled job respects the same
+      // per-campaign limit, not the global env default.
       await emailQueue.add(
         "send-email",
-        { emailId: email.id },
+        { emailId: email.id, hourlyLimit },
         {
           delay,
           jobId: `email-${email.id}-retry-${rate.resetAt}`,
